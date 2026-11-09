@@ -23,7 +23,25 @@ pub async fn connect_happy_eyeballs(
     tls_client_config: Arc<rustls::ClientConfig>,
     fallback_delay: Duration,
     force_tcp: bool,
+    proxy_command: Option<String>,
+    target_host: &str,
 ) -> Result<MorshConnection> {
+    if let Some(ref cmd) = proxy_command {
+        info!(
+            remote = %remote_addr,
+            host = %target_host,
+            "ProxyCommand configured; bypassing QUIC and connecting via command stdio"
+        );
+        return TcpClient::connect_via_proxy(
+            cmd,
+            target_host,
+            remote_addr.port(),
+            server_name,
+            tls_client_config,
+        )
+        .await;
+    }
+
     if force_tcp {
         info!(
             remote = %remote_addr,

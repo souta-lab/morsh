@@ -214,6 +214,8 @@ mod tests {
             rustls_client_config,
             Duration::from_millis(300),
             false,
+            None,
+            "localhost",
         )
         .await
         .unwrap();
@@ -249,6 +251,8 @@ mod tests {
             rustls_client_config,
             Duration::from_millis(300),
             true, // force_tcp
+            None,
+            "localhost",
         )
         .await
         .unwrap();
@@ -285,6 +289,8 @@ mod tests {
             rustls_client_config,
             Duration::from_millis(50),
             false,
+            None,
+            "localhost",
         )
         .await
         .unwrap();

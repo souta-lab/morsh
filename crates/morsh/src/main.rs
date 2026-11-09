@@ -271,6 +271,7 @@ async fn main() -> Result<()> {
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)
+        .with_writer(std::io::stderr)
         .with_target(false)
         .init();
 
@@ -364,6 +365,12 @@ async fn main() -> Result<()> {
         .or(ssh_matched.stealth_knock)
         .or(client_cfg.stealth_knock);
 
+    let effective_proxy_command = openssh_opts
+        .proxy_command
+        .or(morsh_matched.proxy_command)
+        .or(ssh_matched.proxy_command)
+        .or(client_cfg.proxy_command);
+
     let effective_force_tcp = args.force_tcp
         || openssh_opts.force_tcp.unwrap_or(false)
         || morsh_matched.force_tcp.unwrap_or(false)
@@ -424,19 +431,32 @@ async fn main() -> Result<()> {
         "Resolving server address"
     );
 
-    let mut addrs = tokio::net::lookup_host(&target)
-        .await
-        .with_context(|| format!("Failed to resolve destination '{}'", target))?;
-
-    let remote_addr: SocketAddr = if args.ipv4 {
-        addrs.find(|a| a.is_ipv4())
-            .with_context(|| format!("No IPv4 address found for '{}'", target))?
-    } else if args.ipv6 {
-        addrs.find(|a| a.is_ipv6())
-            .with_context(|| format!("No IPv6 address found for '{}'", target))?
-    } else {
-        addrs.next()
-            .with_context(|| format!("Could not find any IP address for '{}'", target))?
+    let remote_addr: SocketAddr = match tokio::net::lookup_host(&target).await {
+        Ok(mut addrs) => {
+            if args.ipv4 {
+                addrs
+                    .find(|a| a.is_ipv4())
+                    .with_context(|| format!("No IPv4 address found for '{}'", target))?
+            } else if args.ipv6 {
+                addrs
+                    .find(|a| a.is_ipv6())
+                    .with_context(|| format!("No IPv6 address found for '{}'", target))?
+            } else {
+                addrs
+                    .next()
+                    .with_context(|| format!("Could not find any IP address for '{}'", target))?
+            }
+        }
+        Err(e) => {
+            if effective_proxy_command.is_some() {
+                // The ProxyCommand receives the unresolved hostname via %h;
+                // this nominal address is used for bookkeeping only.
+                SocketAddr::from(([127, 0, 0, 1], target_port))
+            } else {
+                return Err(e)
+                    .with_context(|| format!("Failed to resolve destination '{}'", target));
+            }
+        }
     };
 
     let tofu_options = TofuOptions {
@@ -466,6 +486,8 @@ async fn main() -> Result<()> {
         rustls_client_config,
         fallback_delay,
         effective_force_tcp,
+        effective_proxy_command,
+        &target_host,
     )
     .await
     .context("Failed to establish connection with morsh server")?;
@@ -515,17 +537,17 @@ async fn main() -> Result<()> {
             supported_auth,
             session_resumed,
         } => {
-            println!("========================================================");
-            println!(" Connected to morshd server!");
-            println!("   Server Software : {}", server_software);
-            println!("   Protocol Version: v{}", version);
-            println!("   Transport       : {}", conn.transport_name());
-            println!("   Session ID      : {}", hex_encode(&session_id));
-            println!("   Resumption Token: {}", hex_encode(&resumption_token));
-            println!("   Session Resumed : {}", session_resumed);
-            println!("   Auth Supported  : {:?}", supported_auth);
-            println!("   Round-Trip Time : {:.2} ms", conn.rtt().as_secs_f64() * 1000.0);
-            println!("========================================================");
+            eprintln!("========================================================");
+            eprintln!(" Connected to morshd server!");
+            eprintln!("   Server Software : {}", server_software);
+            eprintln!("   Protocol Version: v{}", version);
+            eprintln!("   Transport       : {}", conn.transport_name());
+            eprintln!("   Session ID      : {}", hex_encode(&session_id));
+            eprintln!("   Resumption Token: {}", hex_encode(&resumption_token));
+            eprintln!("   Session Resumed : {}", session_resumed);
+            eprintln!("   Auth Supported  : {:?}", supported_auth);
+            eprintln!("   Round-Trip Time : {:.2} ms", conn.rtt().as_secs_f64() * 1000.0);
+            eprintln!("========================================================");
             (session_id, resumption_token, supported_auth)
         }
         ControlMessage::Disconnect { reason_code, message } => {

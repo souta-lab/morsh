@@ -388,6 +388,8 @@ async fn test_happy_eyeballs_seamless_fallback_when_quic_blocked() {
         rustls_client_config,
         Duration::from_millis(100),
         false,
+        None,
+        "localhost",
     )
     .await
     .unwrap();

@@ -94,6 +94,9 @@ pub struct HostRule {
     /// Force TLS 1.3 over TCP fallback
     pub force_tcp: Option<bool>,
 
+    /// ProxyCommand template (%h = host, %p = port); implies TCP via stdio
+    pub proxy_command: Option<String>,
+
     /// Fallback delay in milliseconds
     pub tcp_fallback_timeout: Option<u64>,
 
@@ -149,6 +152,9 @@ pub struct ClientConfig {
 
     /// Force TCP
     pub force_tcp: Option<bool>,
+
+    /// ProxyCommand template (%h = host, %p = port)
+    pub proxy_command: Option<String>,
 
     /// Default fallback delay in milliseconds
     pub tcp_fallback_timeout: Option<u64>,
@@ -241,6 +247,7 @@ impl ClientConfig {
             identity_file: self.identity_file.clone(),
             stealth_knock: self.stealth_knock.clone(),
             force_tcp: self.force_tcp,
+            proxy_command: self.proxy_command.clone(),
             tcp_fallback_timeout: self.tcp_fallback_timeout,
             predict_mode: self.predict_mode.clone(),
             predict_style: self.predict_style.clone(),
@@ -270,6 +277,9 @@ impl ClientConfig {
                 }
                 if let Some(ref sk) = rule.stealth_knock {
                     merged.stealth_knock = Some(sk.clone());
+                }
+                if let Some(ref pc) = rule.proxy_command {
+                    merged.proxy_command = Some(pc.clone());
                 }
                 if let Some(ft) = rule.force_tcp {
                     merged.force_tcp = Some(ft);
@@ -497,6 +507,9 @@ impl SshConfigFile {
                 "stealthknock" => {
                     current_section.rule.stealth_knock = Some(val);
                 }
+                "proxycommand" => {
+                    current_section.rule.proxy_command = Some(val);
+                }
                 "forcetcp" => {
                     current_section.rule.force_tcp = Some(matches_bool_str(&val));
                 }
@@ -599,6 +612,9 @@ impl SshConfigFile {
                 if merged.stealth_knock.is_none() && section.rule.stealth_knock.is_some() {
                     merged.stealth_knock = section.rule.stealth_knock.clone();
                 }
+                if merged.proxy_command.is_none() && section.rule.proxy_command.is_some() {
+                    merged.proxy_command = section.rule.proxy_command.clone();
+                }
                 if merged.force_tcp.is_none() && section.rule.force_tcp.is_some() {
                     merged.force_tcp = section.rule.force_tcp;
                 }
@@ -686,6 +702,7 @@ pub struct OpenSshOptions {
     pub dynamic_forward: Vec<String>,
     pub udp_forward: Vec<String>,
     pub stealth_knock: Option<String>,
+    pub proxy_command: Option<String>,
     pub force_tcp: Option<bool>,
     pub tcp_fallback_timeout: Option<u64>,
     pub predict_mode: Option<String>,
@@ -764,6 +781,9 @@ impl OpenSshOptions {
                 }
                 "stealthknock" => {
                     parsed.stealth_knock = Some(val.to_string());
+                }
+                "proxycommand" => {
+                    parsed.proxy_command = Some(val.to_string());
                 }
                 "forcetcp" => {
                     parsed.force_tcp = Some(matches_bool_str(val));

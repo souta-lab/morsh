@@ -654,7 +654,7 @@ async fn main() -> Result<()> {
 
         match result_msg {
             ControlMessage::AuthResult { success: true, message } => {
-                println!(">> Authentication Successful: {}", message);
+                eprintln!(">> Authentication Successful: {}", message);
             }
             ControlMessage::AuthResult { success: false, message } => {
                 eprintln!(">> Authentication FAILED: {}", message);
